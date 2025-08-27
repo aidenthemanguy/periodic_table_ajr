@@ -1,0 +1,437 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title> Virtual Periodic Table--Unit 1 Capstone Project </title>
+<style>
+  :root{
+    --cell-w: 88px;
+    --cell-h: 84px;
+    --gap: 6px;
+    --bg: #0f1720;
+    --card: #0b1220;
+    --text: #e6eef8;
+  }
+  body{font-family: Inter, system-ui, sans-serif; margin:18px; background:linear-gradient(180deg,#071026 0%, #042033 100%); color:var(--text);}
+  h1{font-size:20px;margin:0 0 12px;}
+  .legend{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px}
+  .legend .item{display:flex;gap:6px;align-items:center;font-size:13px}
+  .chip{width:14px;height:14px;border-radius:3px}
+  /* grid: 18 columns. we use explicit grid-row / grid-column on items */
+  .table-grid{
+    display:grid;
+    grid-template-columns: repeat(18, var(--cell-w));
+    grid-auto-rows: var(--cell-h);
+    gap:var(--gap);
+    max-width: calc(var(--cell-w)*18 + var(--gap)*17);
+    margin-bottom:16px;
+  }
+  .cell{
+    transition: filter 220ms ease, opacity 180ms ease, transform 160ms ease;
+    background:linear-gradient(180deg,#0b2b3d,#083446);
+    color:var(--text);
+    border-radius:6px;
+    padding:6px;
+    min-height:68px;
+    display:flex;flex-direction:column;justify-content:space-between;cursor:pointer;
+    box-shadow: 0 4px 12px rgba(2,6,23,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+  .cell:hover{ transform: translateY(-3px); }
+  .small{font-size:12px;opacity:0.9}
+  .symbol{font-weight:700;font-size:20px;letter-spacing:0.5px}
+  .number{font-size:12px;opacity:.85}
+  .name{font-size:12px;opacity:.95;text-align:right}
+  /* Modal */
+  .overlay{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.55);z-index:40}
+  .card{background:linear-gradient(180deg,#071828,#04202a);padding:18px;border-radius:12px;max-width:680px;width:95%;box-shadow:0 10px 30px rgba(0,0,0,0.6);color:var(--text)}
+  .card h2{margin:0 0 6px}
+  .card .row{display:flex;gap:12px;flex-wrap:wrap}
+  .card .stat{min-width:140px;background:rgba(255,255,255,0.02);padding:8px;border-radius:8px}
+  .close{margin-left:auto;cursor:pointer;border:none;background:transparent;color:var(--text);font-size:18px}
+  input[type="search"]{padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(255,255,255,0.02);color:var(--text);width:220px}
+  .controls{display:flex;gap:8px;align-items:center;margin-bottom:10px}
+  /* category colors */
+  .alkali{background:#ffb3a7}
+  .alkaline{background:#ffd8a8}
+  .transition{background:#c2e6ff}
+  .post{background:#d9c3ff}
+  .metalloid{background:#ffd4a8}
+  .nonmetal{background:#aef0a1}
+  .noble{background:#cfd8ff}
+  .halogen{background:#ffd1da}
+  .lanth{background:#ffe8b3}
+  .actin{background:#ffdbe6}
+  footer{opacity:.7;font-size:13px;margin-top:12px}
+  /* small responsive tweak */
+  @media (max-width:1000px){
+    :root{ --cell-w: 64px; --cell-h: 72px; }
+  }
+</style>
+</head>
+<body>
+<h1>Virtual Periodic Table--Unit 1 Capstone Project </h1>
+
+<div class="controls">
+  <input id="search" type="search" placeholder="Search by name, symbol, or number" />
+  <button id="reset">Reset</button>
+
+  <label style="color:#cbd5e1; font-size:13px; margin-left:8px; display:flex; align-items:center; gap:8px;">
+    Brightness
+    <input id="brightnessScale" type="range" min="0.6" max="1.6" step="0.01" value="1" />
+  </label>
+</div>
+
+<div class="legend" id="legend" aria-hidden="false"></div>
+
+<div class="table-grid" id="grid" aria-hidden="false"></div>
+
+<div class="overlay" id="overlay" role="dialog" aria-modal="true">
+  <div class="card" id="card">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:6px">
+      <div>
+        <div id="card-symbol" style="font-size:36px;font-weight:800"></div>
+        <div class="small" id="card-number"></div>
+      </div>
+      <div style="flex:1">
+        <h2 id="card-name"></h2>
+        <div class="small" id="card-category"></div>
+      </div>
+      <button class="close" id="close" aria-label="Close">&times;</button>
+    </div>
+
+    <div class="row" id="card-stats"></div>
+
+    <p id="card-notes" style="opacity:.9;margin-top:12px"></p>
+  </div>
+</div>
+
+<footer>Tip: lanthanides & actinides are shown in two extra rows below the main table (aligned starting at column 4). Use the Brightness slider to scale the mapping.</footer>
+
+<script>
+/* ---------- full elements array (1–118) ---------- */
+/* (I included full dataset; you can edit values as needed) */
+const elements = [
+{number:1,symbol:"H",name:"Hydrogen",atomic_mass:1.008,group:1,period:1,block:"s",category:"nonmetal",standard_state:"gas",electron_configuration:"1s1",electronegativity:2.20,oxidation_states:[1,-1],year_discovered:1766,notes:"Lightest element; fuel for stars."},
+{number:2,symbol:"He",name:"Helium",atomic_mass:4.002602,group:18,period:1,block:"s",category:"noble",standard_state:"gas",electron_configuration:"1s2",electronegativity:null,oxidation_states:[0],year_discovered:1895,notes:"Noble gas; very inert."},
+{number:3,symbol:"Li",name:"Lithium",atomic_mass:6.94,group:1,period:2,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[He] 2s1",electronegativity:0.98,oxidation_states:[1],year_discovered:1817,notes:"Used in batteries."},
+{number:4,symbol:"Be",name:"Beryllium",atomic_mass:9.0121831,group:2,period:2,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[He] 2s2",electronegativity:1.57,oxidation_states:[2],year_discovered:1798,notes:"Light, stiff metal."},
+{number:5,symbol:"B",name:"Boron",atomic_mass:10.81,group:13,period:2,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[He] 2s2 2p1",electronegativity:2.04,oxidation_states:[3],year_discovered:1808,notes:"Used in glass and fibers."},
+{number:6,symbol:"C",name:"Carbon",atomic_mass:12.011,group:14,period:2,block:"p",category:"nonmetal",standard_state:"solid",electron_configuration:"[He] 2s2 2p2",electronegativity:2.55,oxidation_states:[4,2,-4],year_discovered:"ancient",notes:"Basis of life; many allotropes."},
+{number:7,symbol:"N",name:"Nitrogen",atomic_mass:14.007,group:15,period:2,block:"p",category:"nonmetal",standard_state:"gas",electron_configuration:"[He] 2s2 2p3",electronegativity:3.04,oxidation_states:[-3,3,5],year_discovered:1772,notes:"Major component of air."},
+{number:8,symbol:"O",name:"Oxygen",atomic_mass:15.999,group:16,period:2,block:"p",category:"nonmetal",standard_state:"gas",electron_configuration:"[He] 2s2 2p4",electronegativity:3.44,oxidation_states:[-2,2],year_discovered:1774,notes:"Essential for respiration."},
+{number:9,symbol:"F",name:"Fluorine",atomic_mass:18.998403163,group:17,period:2,block:"p",category:"halogen",standard_state:"gas",electron_configuration:"[He] 2s2 2p5",electronegativity:3.98,oxidation_states:[-1],year_discovered:1886,notes:"Most reactive element."},
+{number:10,symbol:"Ne",name:"Neon",atomic_mass:20.1797,group:18,period:2,block:"p",category:"noble",standard_state:"gas",electron_configuration:"[He] 2s2 2p6",electronegativity:null,oxidation_states:[0],year_discovered:1898,notes:"Used in signs."},
+{number:11,symbol:"Na",name:"Sodium",atomic_mass:22.98976928,group:1,period:3,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[Ne] 3s1",electronegativity:0.93,oxidation_states:[1],year_discovered:1807,notes:"Reactive metal; salts."},
+{number:12,symbol:"Mg",name:"Magnesium",atomic_mass:24.305,group:2,period:3,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[Ne] 3s2",electronegativity:1.31,oxidation_states:[2],year_discovered:1755,notes:"Light structural metal."},
+{number:13,symbol:"Al",name:"Aluminium",atomic_mass:26.9815385,group:13,period:3,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Ne] 3s2 3p1",electronegativity:1.61,oxidation_states:[3],year_discovered:1825,notes:"Common, lightweight metal."},
+{number:14,symbol:"Si",name:"Silicon",atomic_mass:28.085,group:14,period:3,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Ne] 3s2 3p2",electronegativity:1.90,oxidation_states:[4,2,-4],year_discovered:1824,notes:"Semiconductor; abundant in Earth's crust."},
+{number:15,symbol:"P",name:"Phosphorus",atomic_mass:30.973761998,group:15,period:3,block:"p",category:"nonmetal",standard_state:"solid",electron_configuration:"[Ne] 3s2 3p3",electronegativity:2.19,oxidation_states:[-3,3,5],year_discovered:1669,notes:"Important in biology."},
+{number:16,symbol:"S",name:"Sulfur",atomic_mass:32.06,group:16,period:3,block:"p",category:"nonmetal",standard_state:"solid",electron_configuration:"[Ne] 3s2 3p4",electronegativity:2.58,oxidation_states:[-2,2,4,6],year_discovered:"ancient",notes:"Used in fertilizers, industry."},
+{number:17,symbol:"Cl",name:"Chlorine",atomic_mass:35.45,group:17,period:3,block:"p",category:"halogen",standard_state:"gas",electron_configuration:"[Ne] 3s2 3p5",electronegativity:3.16,oxidation_states:[-1,1,3,5,7],year_discovered:1774,notes:"Reactive gas; disinfectant."},
+{number:18,symbol:"Ar",name:"Argon",atomic_mass:39.948,group:18,period:3,block:"p",category:"noble",standard_state:"gas",electron_configuration:"[Ne] 3s2 3p6",electronegativity:null,oxidation_states:[0],year_discovered:1894,notes:"Inert atmosphere applications."},
+{number:19,symbol:"K",name:"Potassium",atomic_mass:39.0983,group:1,period:4,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[Ar] 4s1",electronegativity:0.82,oxidation_states:[1],year_discovered:1807,notes:"Essential nutrient."},
+{number:20,symbol:"Ca",name:"Calcium",atomic_mass:40.078,group:2,period:4,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[Ar] 4s2",electronegativity:1.00,oxidation_states:[2],year_discovered:1808,notes:"Bones, cement, alloys."},
+{number:21,symbol:"Sc",name:"Scandium",atomic_mass:44.955908,group:3,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d1 4s2",electronegativity:1.36,oxidation_states:[3],year_discovered:1879,notes:"Light transition metal."},
+{number:22,symbol:"Ti",name:"Titanium",atomic_mass:47.867,group:4,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d2 4s2",electronegativity:1.54,oxidation_states:[4,3,2],year_discovered:1791,notes:"Strong, corrosion-resistant."},
+{number:23,symbol:"V",name:"Vanadium",atomic_mass:50.9415,group:5,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d3 4s2",electronegativity:1.63,oxidation_states:[5,4,3,2],year_discovered:1801,notes:"Alloys, catalysts."},
+{number:24,symbol:"Cr",name:"Chromium",atomic_mass:51.9961,group:6,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d5 4s1",electronegativity:1.66,oxidation_states:[6,3,2],year_discovered:1797,notes:"Chrome plating."},
+{number:25,symbol:"Mn",name:"Manganese",atomic_mass:54.938044,group:7,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d5 4s2",electronegativity:1.55,oxidation_states:[7,6,2,4],year_discovered:1774,notes:"Steel alloys."},
+{number:26,symbol:"Fe",name:"Iron",atomic_mass:55.845,group:8,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d6 4s2",electronegativity:1.83,oxidation_states:[2,3,6],year_discovered:"ancient",notes:"Essential structural metal."},
+{number:27,symbol:"Co",name:"Cobalt",atomic_mass:58.933194,group:9,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d7 4s2",electronegativity:1.88,oxidation_states:[2,3],year_discovered:1735,notes:"Batteries, alloys."},
+{number:28,symbol:"Ni",name:"Nickel",atomic_mass:58.6934,group:10,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d8 4s2",electronegativity:1.91,oxidation_states:[2,3],year_discovered:1751,notes:"Stainless steel, coins."},
+{number:29,symbol:"Cu",name:"Copper",atomic_mass:63.546,group:11,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s1",electronegativity:1.90,oxidation_states:[1,2],year_discovered:"ancient",notes:"Conductive metal."},
+{number:30,symbol:"Zn",name:"Zinc",atomic_mass:65.38,group:12,period:4,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s2",electronegativity:1.65,oxidation_states:[2],year_discovered:1746,notes:"Galvanizing steel."},
+{number:31,symbol:"Ga",name:"Gallium",atomic_mass:69.723,group:13,period:4,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s2 4p1",electronegativity:1.81,oxidation_states:[3,1],year_discovered:1875,notes:"Low-melting metal."},
+{number:32,symbol:"Ge",name:"Germanium",atomic_mass:72.630,group:14,period:4,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s2 4p2",electronegativity:2.01,oxidation_states:[4,2,-4],year_discovered:1886,notes:"Semiconductor."},
+{number:33,symbol:"As",name:"Arsenic",atomic_mass:74.921595,group:15,period:4,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s2 4p3",electronegativity:2.18,oxidation_states:[-3,3,5],year_discovered:"ancient",notes:"Toxic element."},
+{number:34,symbol:"Se",name:"Selenium",atomic_mass:78.971,group:16,period:4,block:"p",category:"nonmetal",standard_state:"solid",electron_configuration:"[Ar] 3d10 4s2 4p4",electronegativity:2.55,oxidation_states:[-2,4,6],year_discovered:1817,notes:"Photoconductive properties."},
+{number:35,symbol:"Br",name:"Bromine",atomic_mass:79.904,group:17,period:4,block:"p",category:"halogen",standard_state:"liquid",electron_configuration:"[Ar] 3d10 4s2 4p5",electronegativity:2.96,oxidation_states:[-1,1,3,5],year_discovered:1826,notes:"Red-brown volatile liquid."},
+{number:36,symbol:"Kr",name:"Krypton",atomic_mass:83.798,group:18,period:4,block:"p",category:"noble",standard_state:"gas",electron_configuration:"[Ar] 3d10 4s2 4p6",electronegativity:null,oxidation_states:[0],year_discovered:1898,notes:"Noble gas; used in lighting."},
+{number:37,symbol:"Rb",name:"Rubidium",atomic_mass:85.4678,group:1,period:5,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[Kr] 5s1",electronegativity:0.82,oxidation_states:[1],year_discovered:1861,notes:"Highly reactive alkali metal."},
+{number:38,symbol:"Sr",name:"Strontium",atomic_mass:87.62,group:2,period:5,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[Kr] 5s2",electronegativity:0.95,oxidation_states:[2],year_discovered:1790,notes:"Used in fireworks."},
+{number:39,symbol:"Y",name:"Yttrium",atomic_mass:88.90584,group:3,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d1 5s2",electronegativity:1.22,oxidation_states:[3],year_discovered:1794,notes:"Used in ceramics."},
+{number:40,symbol:"Zr",name:"Zirconium",atomic_mass:91.224,group:4,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d2 5s2",electronegativity:1.33,oxidation_states:[4],year_discovered:1789,notes:"Corrosion-resistant."},
+{number:41,symbol:"Nb",name:"Niobium",atomic_mass:92.90637,group:5,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d4 5s1",electronegativity:1.6,oxidation_states:[5,3],year_discovered:1801,notes:"Superalloys, superconductors."},
+{number:42,symbol:"Mo",name:"Molybdenum",atomic_mass:95.95,group:6,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d5 5s1",electronegativity:2.16,oxidation_states:[6,4,3,2],year_discovered:1778,notes:"High-melting metal used in alloys."},
+{number:43,symbol:"Tc",name:"Technetium",atomic_mass:98,group:7,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d5 5s2",electronegativity:1.9,oxidation_states:[7,4],year_discovered:1937,notes:"First synthetic element; medical isotopes."},
+{number:44,symbol:"Ru",name:"Ruthenium",atomic_mass:101.07,group:8,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d7 5s1",electronegativity:2.2,oxidation_states:[3,4,6],year_discovered:1844,notes:"Catalysts, electronics."},
+{number:45,symbol:"Rh",name:"Rhodium",atomic_mass:102.90550,group:9,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d8 5s1",electronegativity:2.28,oxidation_states:[3],year_discovered:1803,notes:"Catalytic converters."},
+{number:46,symbol:"Pd",name:"Palladium",atomic_mass:106.42,group:10,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d10",electronegativity:2.20,oxidation_states:[2,4],year_discovered:1803,notes:"Catalysts, hydrogen storage."},
+{number:47,symbol:"Ag",name:"Silver",atomic_mass:107.8682,group:11,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s1",electronegativity:1.93,oxidation_states:[1,2],year_discovered:"ancient",notes:"Excellent conductor."},
+{number:48,symbol:"Cd",name:"Cadmium",atomic_mass:112.414,group:12,period:5,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2",electronegativity:1.69,oxidation_states:[2],year_discovered:1817,notes:"Used in batteries (older)."},
+{number:49,symbol:"In",name:"Indium",atomic_mass:114.818,group:13,period:5,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2 5p1",electronegativity:1.78,oxidation_states:[3,1],year_discovered:1863,notes:"Used in LCDs."},
+{number:50,symbol:"Sn",name:"Tin",atomic_mass:118.71,group:14,period:5,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2 5p2",electronegativity:1.96,oxidation_states:[4,2],year_discovered:"ancient",notes:"Alloys, plating."},
+{number:51,symbol:"Sb",name:"Antimony",atomic_mass:121.760,group:15,period:5,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2 5p3",electronegativity:2.05,oxidation_states:[3,5,-3],year_discovered:"ancient",notes:"Flame retardants, alloys."},
+{number:52,symbol:"Te",name:"Tellurium",atomic_mass:127.60,group:16,period:5,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2 5p4",electronegativity:2.1,oxidation_states:[-2,4,6],year_discovered:1782,notes:"Semiconductors, alloys."},
+{number:53,symbol:"I",name:"Iodine",atomic_mass:126.90447,group:17,period:5,block:"p",category:"halogen",standard_state:"solid",electron_configuration:"[Kr] 4d10 5s2 5p5",electronegativity:2.66,oxidation_states:[-1,1,5,7],year_discovered:1811,notes:"Essential trace element; disinfectant."},
+{number:54,symbol:"Xe",name:"Xenon",atomic_mass:131.293,group:18,period:5,block:"p",category:"noble",standard_state:"gas",electron_configuration:"[Kr] 4d10 5s2 5p6",electronegativity:null,oxidation_states:[0,2,4],year_discovered:1898,notes:"Used in lighting and anesthesia."},
+{number:55,symbol:"Cs",name:"Cesium",atomic_mass:132.90545196,group:1,period:6,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[Xe] 6s1",electronegativity:0.79,oxidation_states:[1],year_discovered:1860,notes:"Photoelectric cells, atomic clocks."},
+{number:56,symbol:"Ba",name:"Barium",atomic_mass:137.327,group:2,period:6,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[Xe] 6s2",electronegativity:0.89,oxidation_states:[2],year_discovered:1808,notes:"Drilling fluids, fireworks."},
+{number:57,symbol:"La",name:"Lanthanum",atomic_mass:138.90547,group:3,period:6,block:"d",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 5d1 6s2",electronegativity:1.10,oxidation_states:[3],year_discovered:1839,notes:"Start of lanthanide series."},
+{number:58,symbol:"Ce",name:"Cerium",atomic_mass:140.116,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f1 5d1 6s2",electronegativity:1.12,oxidation_states:[3,4],year_discovered:1803,notes:"Used in catalysts."},
+{number:59,symbol:"Pr",name:"Praseodymium",atomic_mass:140.90766,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f3 6s2",electronegativity:1.13,oxidation_states:[3,4],year_discovered:1885,notes:"Magnets, alloys."},
+{number:60,symbol:"Nd",name:"Neodymium",atomic_mass:144.242,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f4 6s2",electronegativity:1.14,oxidation_states:[3],year_discovered:1885,notes:"Strong permanent magnets."},
+{number:61,symbol:"Pm",name:"Promethium",atomic_mass:145,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f5 6s2",electronegativity:1.13,oxidation_states:[3],year_discovered:1945,notes:"Radioactive; few applications."},
+{number:62,symbol:"Sm",name:"Samarium",atomic_mass:150.36,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f6 6s2",electronegativity:1.17,oxidation_states:[2,3],year_discovered:1879,notes:"Permanent magnets, lasers."},
+{number:63,symbol:"Eu",name:"Europium",atomic_mass:151.964,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f7 6s2",electronegativity:1.2,oxidation_states:[2,3],year_discovered:1901,notes:"Phosphors in displays."},
+{number:64,symbol:"Gd",name:"Gadolinium",atomic_mass:157.25,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f7 5d1 6s2",electronegativity:1.2,oxidation_states:[3],year_discovered:1880,notes:"MRI contrast agents."},
+{number:65,symbol:"Tb",name:"Terbium",atomic_mass:158.92535,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f9 6s2",electronegativity:1.2,oxidation_states:[3,4],year_discovered:1843,notes:"Phosphors."},
+{number:66,symbol:"Dy",name:"Dysprosium",atomic_mass:162.500,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f10 6s2",electronegativity:1.22,oxidation_states:[3],year_discovered:1886,notes:"Magnets, neutron absorbent."},
+{number:67,symbol:"Ho",name:"Holmium",atomic_mass:164.93033,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f11 6s2",electronegativity:1.23,oxidation_states:[3],year_discovered:1878,notes:"Specialty magnets."},
+{number:68,symbol:"Er",name:"Erbium",atomic_mass:167.259,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f12 6s2",electronegativity:1.24,oxidation_states:[3],year_discovered:1843,notes:"Lasers, optical fibers."},
+{number:69,symbol:"Tm",name:"Thulium",atomic_mass:168.93422,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f13 6s2",electronegativity:1.25,oxidation_states:[2,3],year_discovered:1879,notes:"Rare, few applications."},
+{number:70,symbol:"Yb",name:"Ytterbium",atomic_mass:173.045,group:null,period:6,block:"f",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f14 6s2",electronegativity:1.1,oxidation_states:[2,3],year_discovered:1878,notes:"Atomic clocks, lasers."},
+{number:71,symbol:"Lu",name:"Lutetium",atomic_mass:174.9668,group:3,period:6,block:"d",category:"lanth",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d1 6s2",electronegativity:1.27,oxidation_states:[3],year_discovered:1907,notes:"Dense, rare."},
+{number:72,symbol:"Hf",name:"Hafnium",atomic_mass:178.49,group:4,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d2 6s2",electronegativity:1.3,oxidation_states:[4],year_discovered:1923,notes:"Control rods, alloys."},
+{number:73,symbol:"Ta",name:"Tantalum",atomic_mass:180.94788,group:5,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d3 6s2",electronegativity:1.5,oxidation_states:[5],year_discovered:1802,notes:"Capacitors, high-melting metal."},
+{number:74,symbol:"W",name:"Tungsten",atomic_mass:183.84,group:6,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d4 6s2",electronegativity:2.36,oxidation_states:[6,4,2],year_discovered:1783,notes:"Highest melting point metal."},
+{number:75,symbol:"Re",name:"Rhenium",atomic_mass:186.207,group:7,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d5 6s2",electronegativity:1.9,oxidation_states:[7,4],year_discovered:1925,notes:"High-temp alloys."},
+{number:76,symbol:"Os",name:"Osmium",atomic_mass:190.23,group:8,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d6 6s2",electronegativity:2.2,oxidation_states:[4,3,2,8],year_discovered:1803,notes:"Very dense metal."},
+{number:77,symbol:"Ir",name:"Iridium",atomic_mass:192.217,group:9,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d7 6s2",electronegativity:2.20,oxidation_states:[3,4],year_discovered:1803,notes:"Corrosion-resistant."},
+{number:78,symbol:"Pt",name:"Platinum",atomic_mass:195.084,group:10,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d9 6s1",electronegativity:2.28,oxidation_states:[2,4],year_discovered:1735,notes:"Catalysts, jewelry."},
+{number:79,symbol:"Au",name:"Gold",atomic_mass:196.966569,group:11,period:6,block:"d",category:"transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s1",electronegativity:2.54,oxidation_states:[1,3],year_discovered:"ancient",notes:"Noble metal; corrosion-resistant."},
+{number:80,symbol:"Hg",name:"Mercury",atomic_mass:200.592,group:12,period:6,block:"d",category:"transition",standard_state:"liquid",electron_configuration:"[Xe] 4f14 5d10 6s2",electronegativity:2.00,oxidation_states:[2,1],year_discovered:"ancient",notes:"Only common liquid metal."},
+{number:81,symbol:"Tl",name:"Thallium",atomic_mass:204.38,group:13,period:6,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s2 6p1",electronegativity:1.62,oxidation_states:[1,3],year_discovered:1861,notes:"Toxic; electronics."},
+{number:82,symbol:"Pb",name:"Lead",atomic_mass:207.2,group:14,period:6,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s2 6p2",electronegativity:2.33,oxidation_states:[2,4],year_discovered:"ancient",notes:"Toxic; batteries, shielding."},
+{number:83,symbol:"Bi",name:"Bismuth",atomic_mass:208.98040,group:15,period:6,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s2 6p3",electronegativity:2.02,oxidation_states:[3,5],year_discovered:1753,notes:"Low toxicity compared to Pb."},
+{number:84,symbol:"Po",name:"Polonium",atomic_mass:209,group:16,period:6,block:"p",category:"metalloid",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s2 6p4",electronegativity:2.0,oxidation_states:[-2,2,4,6],year_discovered:1898,notes:"Highly radioactive."},
+{number:85,symbol:"At",name:"Astatine",atomic_mass:210,group:17,period:6,block:"p",category:"halogen",standard_state:"solid",electron_configuration:"[Xe] 4f14 5d10 6s2 6p5",electronegativity:2.2,oxidation_states:[-1,1,3,5],year_discovered:1940,notes:"Rare, radioactive."},
+{number:86,symbol:"Rn",name:"Radon",atomic_mass:222,group:18,period:6,block:"p",category:"noble",standard_state:"gas",electron_configuration:"[Xe] 4f14 5d10 6s2 6p6",electronegativity:null,oxidation_states:[0,2],year_discovered:1900,notes:"Radioactive noble gas."},
+{number:87,symbol:"Fr",name:"Francium",atomic_mass:223,group:1,period:7,block:"s",category:"alkali",standard_state:"solid",electron_configuration:"[Rn] 7s1",electronegativity:0.7,oxidation_states:[1],year_discovered:1939,notes:"Highly radioactive; extremely rare."},
+{number:88,symbol:"Ra",name:"Radium",atomic_mass:226,group:2,period:7,block:"s",category:"alkaline",standard_state:"solid",electron_configuration:"[Rn] 7s2",electronegativity:0.9,oxidation_states:[2],year_discovered:1898,notes:"Radioactive; luminous paints historically."},
+{number:89,symbol:"Ac",name:"Actinium",atomic_mass:227,group:3,period:7,block:"d",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 6d1 7s2",electronegativity:1.1,oxidation_states:[3],year_discovered:1899,notes:"Start of actinide series."},
+{number:90,symbol:"Th",name:"Thorium",atomic_mass:232.0377,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 6d2 7s2",electronegativity:1.3,oxidation_states:[4,3],year_discovered:1829,notes:"Potential nuclear fuel."},
+{number:91,symbol:"Pa",name:"Protactinium",atomic_mass:231.03588,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f2 6d1 7s2",electronegativity:1.5,oxidation_states:[5,4],year_discovered:1913,notes:"Rare; research interest."},
+{number:92,symbol:"U",name:"Uranium",atomic_mass:238.02891,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f3 6d1 7s2",electronegativity:1.38,oxidation_states:[6,5,4,3],year_discovered:1789,notes:"Nuclear fuel; radioactive."},
+{number:93,symbol:"Np",name:"Neptunium",atomic_mass:237,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f4 6d1 7s2",electronegativity:1.36,oxidation_states:[7,6,5,4],year_discovered:1940,notes:"Synthetic actinide."},
+{number:94,symbol:"Pu",name:"Plutonium",atomic_mass:244,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f6 7s2",electronegativity:1.28,oxidation_states:[6,5,4,3],year_discovered:1940,notes:"Nuclear fuel and weapons material."},
+{number:95,symbol:"Am",name:"Americium",atomic_mass:243,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f7 7s2",electronegativity:1.13,oxidation_states:[3,2,4],year_discovered:1944,notes:"Smoke detectors (small amounts)."},
+{number:96,symbol:"Cm",name:"Curium",atomic_mass:247,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f7 6d1 7s2",electronegativity:1.28,oxidation_states:[3],year_discovered:1944,notes:"Highly radioactive."},
+{number:97,symbol:"Bk",name:"Berkelium",atomic_mass:247,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f9 7s2",electronegativity:1.3,oxidation_states:[3,4],year_discovered:1949,notes:"Synthetic; research."},
+{number:98,symbol:"Cf",name:"Californium",atomic_mass:251,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f10 7s2",electronegativity:1.3,oxidation_states:[3],year_discovered:1950,notes:"Neutron sources."},
+{number:99,symbol:"Es",name:"Einsteinium",atomic_mass:252,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f11 7s2",electronegativity:null,oxidation_states:[3],year_discovered:1952,notes:"Synthetic, named after Einstein."},
+{number:100,symbol:"Fm",name:"Fermium",atomic_mass:257,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f12 7s2",electronegativity:null,oxidation_states:[3],year_discovered:1952,notes:"Synthetic."},
+{number:101,symbol:"Md",name:"Mendelevium",atomic_mass:258,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f13 7s2",electronegativity:null,oxidation_states:[2,3],year_discovered:1955,notes:"Named for Mendeleev."},
+{number:102,symbol:"No",name:"Nobelium",atomic_mass:259,group:null,period:7,block:"f",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f14 7s2",electronegativity:null,oxidation_states:[2],year_discovered:1958,notes:"Synthetic."},
+{number:103,symbol:"Lr",name:"Lawrencium",atomic_mass:266,group:null,period:7,block:"d",category:"actin",standard_state:"solid",electron_configuration:"[Rn] 5f14 7s2 7p1",electronegativity:null,oxidation_states:[3],year_discovered:1961,notes:"Synthetic."},
+{number:104,symbol:"Rf",name:"Rutherfordium",atomic_mass:267,group:4,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[4],year_discovered:1964,notes:"Synthetic transactinide."},
+{number:105,symbol:"Db",name:"Dubnium",atomic_mass:268,group:5,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[5],year_discovered:1967,notes:"Synthetic."},
+{number:106,symbol:"Sg",name:"Seaborgium",atomic_mass:269,group:6,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[6],year_discovered:1974,notes:"Synthetic."},
+{number:107,symbol:"Bh",name:"Bohrium",atomic_mass:270,group:7,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[7],year_discovered:1976,notes:"Synthetic."},
+{number:108,symbol:"Hs",name:"Hassium",atomic_mass:269,group:8,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[8],year_discovered:1984,notes:"Synthetic."},
+{number:109,symbol:"Mt",name:"Meitnerium",atomic_mass:278,group:9,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[1,2,3],year_discovered:1982,notes:"Synthetic."},
+{number:110,symbol:"Ds",name:"Darmstadtium",atomic_mass:281,group:10,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[2,4],year_discovered:1994,notes:"Synthetic."},
+{number:111,symbol:"Rg",name:"Roentgenium",atomic_mass:282,group:11,period:7,block:"d",category:"transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[1,3],year_discovered:1994,notes:"Synthetic."},
+{number:112,symbol:"Cn",name:"Copernicium",atomic_mass:285,group:12,period:7,block:"d",category:"post-transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[2],year_discovered:1996,notes:"Synthetic; very short-lived."},
+{number:113,symbol:"Nh",name:"Nihonium",atomic_mass:286,group:13,period:7,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[1,3],year_discovered:2004,notes:"Synthetic."},
+{number:114,symbol:"Fl",name:"Flerovium",atomic_mass:289,group:14,period:7,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[2,4],year_discovered:1998,notes:"Synthetic."},
+{number:115,symbol:"Mc",name:"Moscovium",atomic_mass:290,group:15,period:7,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[1,3,5],year_discovered:2003,notes:"Synthetic."},
+{number:116,symbol:"Lv",name:"Livermorium",atomic_mass:293,group:16,period:7,block:"p",category:"post-transition",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[2,4],year_discovered:2000,notes:"Synthetic."},
+{number:117,symbol:"Ts",name:"Tennessine",atomic_mass:294,group:17,period:7,block:"p",category:"halogen",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[-1,1,3,5],year_discovered:2010,notes:"Synthetic."},
+{number:118,symbol:"Og",name:"Oganesson",atomic_mass:294,group:18,period:7,block:"p",category:"noble",standard_state:"solid",electron_configuration:null,electronegativity:null,oxidation_states:[0],year_discovered:2002,notes:"Synthetic noble gas; extremely short-lived."}
+];
+
+/* ---------- end elements array ---------- */
+
+/* category → CSS class map */
+const categoryMap = {
+  "alkali":"alkali",
+  "alkaline":"alkaline",
+  "transition":"transition",
+  "post-transition":"post",
+  "metalloid":"metalloid",
+  "nonmetal":"nonmetal",
+  "noble":"noble",
+  "halogen":"halogen",
+  "lanth":"lanth",
+  "actin":"actin"
+};
+
+/* build legend */
+const legend = document.getElementById('legend');
+const legendCats = ["alkali","alkaline","transition","post-transition","metalloid","nonmetal","noble","halogen","lanth","actin"];
+legendCats.forEach(cat=>{
+  const el = document.createElement('div'); el.className='item';
+  const chip = document.createElement('div'); chip.className='chip ' + (categoryMap[cat]||''); chip.style.border = '1px solid rgba(255,255,255,0.05)';
+  el.appendChild(chip);
+  const label = document.createElement('div'); label.textContent = cat; el.appendChild(label);
+  legend.appendChild(el);
+});
+
+/* grid element */
+const grid = document.getElementById('grid');
+
+/* Precompute fixed f-block ordering (so filtering/searching doesn't change columns) */
+const f6_all = elements.filter(e=>e.block==='f' && e.period===6).sort((a,b)=>a.number-b.number);
+const f7_all = elements.filter(e=>e.block==='f' && e.period===7).sort((a,b)=>a.number-b.number);
+
+// ---------- brightness mapping helpers ----------
+function mapToBrightness(value, minVal, maxVal, minB=0.7, maxB=1.15){
+  if(value == null || isNaN(value)) return 1.0;
+  if(minVal === maxVal) return (minB + maxB) / 2;
+  const clamped = Math.max(minVal, Math.min(maxVal, value));
+  const t = (clamped - minVal) / (maxVal - minVal); // 0..1
+  return minB + t * (maxB - minB);
+}
+
+// choose property to map (options: 'electronegativity', 'atomic_mass', 'number')
+const BRIGHTNESS_PROPERTY = 'electronegativity';
+
+// sensible ranges for properties
+const propertyRanges = {
+  electronegativity: { min: 0.7, max: 4.0 },
+  atomic_mass: { min: 1, max: 295 },
+  number: { min: 1, max: 118 }
+};
+
+/* place elements using explicit grid coordinates */
+function placeElements(list){
+  // clear everything (we re-render tiles with explicit grid placement)
+  grid.innerHTML = '';
+
+  list.forEach(el=>{
+    const cell = document.createElement('div');
+    const cls = categoryMap[el.category] || '';
+    cell.className = 'cell visible ' + cls;
+    cell.dataset.number = el.number;
+    cell.innerHTML = `<div class="small number">${el.number}</div>
+                      <div class="symbol">${el.symbol}</div>
+                      <div class="name">${el.name}</div>`;
+    cell.onclick = ()=> showCard(el);
+
+    // --- compute and apply brightness based on a numeric element property ---
+    const prop = BRIGHTNESS_PROPERTY;
+    const range = propertyRanges[prop] || {min:0, max:1};
+    const rawVal = (prop === 'number') ? el.number : (el[prop] ?? null);
+    const baseBrightness = mapToBrightness(rawVal, range.min, range.max, 0.7, 1.15);
+    cell.dataset.baseBrightness = baseBrightness.toFixed(3); // save for slider
+    cell.style.filter = `brightness(${baseBrightness})`;
+
+    // f-block (lanthanides/actinides): place on extra rows below main table
+    if(el.block === 'f' && el.period === 6){
+      // lanthanides → row 8, start at column 4 (columns 4..17)
+      const idx = f6_all.findIndex(x=>x.number === el.number);
+      const startCol = 4;
+      cell.style.gridRowStart = 8;
+      cell.style.gridColumnStart = startCol + (idx >= 0 ? idx : 0);
+    } else if(el.block === 'f' && el.period === 7){
+      // actinides → row 9, start at column 4
+      const idx = f7_all.findIndex(x=>x.number === el.number);
+      const startCol = 4;
+      cell.style.gridRowStart = 9;
+      cell.style.gridColumnStart = startCol + (idx >= 0 ? idx : 0);
+    } else {
+      // main table: place by group and period. if group missing, fall back to column 3.
+      const col = el.group || 3;
+      const row = el.period || 7;
+      cell.style.gridColumnStart = col;
+      cell.style.gridRowStart = row;
+    }
+
+    grid.appendChild(cell);
+  });
+}
+
+
+function computeValence(el){
+  // He special-case
+  if(el.symbol === 'He') return 2;
+
+  // Main-group quick rule
+  if((el.block === 's' || el.block === 'p') && el.group){
+    if(el.group <= 2) return el.group;                 // 1–2
+    if(el.group >= 13 && el.group <= 18) return el.group - 10; // 13–18 → 3–8
+  }
+
+  // d- and f-block are variable; give a friendly note
+  if(el.block === 'd') return 'variable (often 2; s+d)';
+  if(el.block === 'f') return 'variable (generally 2–3; s+f)';
+
+  // Fallback: try to infer from configuration (count electrons in highest n shell)
+  // Simple parse: sum exponents for terms that share the highest principal quantum number.
+  try{
+    const cfg = (el.electron_configuration || '').replace(/\[.*?\]\s*/g,'').trim();
+    const parts = cfg ? cfg.split(/\s+/) : [];
+    let maxN = -1, counts = {};
+    for(const part of parts){
+      const m = part.match(/^(\d)([spdf])(\d+)$/i);
+      if(!m) continue;
+      const n = parseInt(m[1],10), count = parseInt(m[3],10);
+      maxN = Math.max(maxN, n);
+      counts[n] = (counts[n]||0) + count;
+    }
+    if(maxN > 0 && counts[maxN] != null) return counts[maxN];
+  }catch(_){}
+
+  return '—';
+}
+
+/* show modal card */
+const overlay = document.getElementById('overlay');
+const cardSymbol = document.getElementById('card-symbol');
+const cardNumber = document.getElementById('card-number');
+const cardName = document.getElementById('card-name');
+const cardCategory = document.getElementById('card-category');
+const cardStats = document.getElementById('card-stats');
+const cardNotes = document.getElementById('card-notes');
+const closeBtn = document.getElementById('close');
+
+function showCard(el){
+  cardSymbol.textContent = el.symbol;
+  cardNumber.textContent = `Atomic number ${el.number} — mass ${el.atomic_mass}`;
+  cardName.textContent = el.name;
+  cardCategory.textContent = `${el.category} • period ${el.period}${el.group?(', group '+el.group):''}`;
+  cardStats.innerHTML = '';
+  const stats = [
+    ['Electron config', el.electron_configuration || '—'],
+    ['Standard state', el.standard_state || '—'],
+    ['Electronegativity', el.electronegativity ?? '—'],
+    ['Oxidation states', (el.oxidation_states || []).join(', ') || '—'],
+    ['Valence electrons', computeValence(el)],
+    ['Year discovered', el.year_discovered || '—']
+  ];
+  stats.forEach(s=>{
+    const sdiv = document.createElement('div');
+    sdiv.className = 'stat';
+    sdiv.innerHTML = `<div style="font-weight:700">${s[0]}</div><div class="small">${s[1]}</div>`;
+    cardStats.appendChild(sdiv);
+  });
+  cardNotes.textContent = el.notes || '';
+  overlay.style.display = 'flex';
+}
+
+closeBtn.onclick = ()=> overlay.style.display = 'none';
+overlay.onclick = (e)=> { if(e.target === overlay) overlay.style.display='none'; }
+
+/* search functionality (search uses full elements array for fixed placement) */
+const search = document.getElementById('search');
+search.addEventListener('input', ()=>{
+  const q = search.value.trim().toLowerCase();
+  if(!q) { placeElements(elements); return; }
+  const filtered = elements.filter(el=>{
+    return el.name.toLowerCase().includes(q) || el.symbol.toLowerCase().includes(q) || String(el.number) === q;
+  });
+  placeElements(filtered);
+});
+document.getElementById('reset').addEventListener('click', ()=>{ search.value=''; placeElements(elements); });
+
+/* Brightness slider behaviour */
+const slider = document.getElementById('brightnessScale');
+if(slider){
+  slider.addEventListener('input', ()=> {
+    const mul = parseFloat(slider.value);
+    document.querySelectorAll('.cell.visible').forEach(cell=>{
+      const base = parseFloat(cell.dataset.baseBrightness || cell.dataset.basebrightness || 1) || 1;
+      const newB = (base * mul).toFixed(3);
+      cell.style.filter = `brightness(${newB})`;
+    });
+  });
+}
+
+/* initial render */
+placeElements(elements);
+
+</script>
+</body>
+</html>
